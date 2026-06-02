@@ -1,0 +1,132 @@
+version: 2.1
+
+# Reusable executors for the three target platforms + a small Linux node image
+# used for linting and tests.
+executors:
+  node:
+    docker:
+      - image: cimg/node:22.10
+    resource_class: medium
+  mac:
+    macos:
+      xcode: "15.4.0"
+    resource_class: macos.m1.medium.gen1
+  win:
+    machine:
+      image: windows-server-2022-gui:current
+      resource_class: windows.medium
+      shell: bash.exe
+
+# ---------------------------------------------------------------------------
+# Reusable steps
+# ---------------------------------------------------------------------------
+commands:
+  yarn-install:
+    description: "Install deps with cache (Unix)"
+    steps:
+      - restore_cache:
+          keys:
+            - v1-yarn-{{ arch }}-{{ checksum "yarn.lock" }}
+            - v1-yarn-{{ arch }}-
+      - run:
+          name: yarn install
+          command: yarn install --frozen-lockfile
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-yarn-{{ arch }}-{{ checksum "yarn.lock" }}
+
+  yarn-install-win:
+    description: "Install deps with cache (Windows)"
+    steps:
+      - restore_cache:
+          keys:
+            - v1-yarn-win-{{ checksum "yarn.lock" }}
+            - v1-yarn-win-
+      - run:
+          name: install yarn
+          command: npm install -g yarn
+      - run:
+          name: yarn install
+          command: yarn install --frozen-lockfile
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-yarn-win-{{ checksum "yarn.lock" }}
+
+# ---------------------------------------------------------------------------
+# Jobs
+# ---------------------------------------------------------------------------
+jobs:
+  test:
+    executor: node
+    steps:
+      - checkout
+      - yarn-install
+      - run:
+          name: type-check
+          command: yarn exec vue-tsc --noEmit
+      - run:
+          name: lint
+          command: yarn lint
+      - run:
+          name: unit tests
+          command: yarn test
+
+  build-mac:
+    executor: mac
+    steps:
+      - checkout
+      - yarn-install
+      - run:
+          name: make (darwin universal)
+          command: yarn make:mac
+      - store_artifacts:
+          path: out/make
+          destination: mac
+
+  build-windows:
+    executor: win
+    steps:
+      - checkout
+      - yarn-install-win
+      - run:
+          name: make (win32 x64)
+          command: yarn make:win
+      - store_artifacts:
+          path: out/make
+          destination: windows
+
+  build-linux:
+    executor: node
+    steps:
+      - checkout
+      - run:
+          name: install Linux maker deps (dpkg, fakeroot, rpm)
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y dpkg fakeroot rpm
+      - yarn-install
+      - run:
+          name: make (linux x64)
+          command: yarn make:linux
+      - store_artifacts:
+          path: out/make
+          destination: linux
+
+# ---------------------------------------------------------------------------
+# Workflows
+# ---------------------------------------------------------------------------
+workflows:
+  ci:
+    jobs:
+      - test
+      - build-mac:
+          requires:
+            - test
+      - build-windows:
+          requires:
+            - test
+      - build-linux:
+          requires:
+            - test
