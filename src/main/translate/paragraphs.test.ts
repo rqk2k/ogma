@@ -117,6 +117,28 @@ describe('injectTranslations', () => {
     expect(result).not.toContain('Two');
   });
 
+  it('falls back to plain text in the original runs when DeepL returns unbalanced XML', () => {
+    const xml = wrap(
+      '<w:p>' +
+        '<w:r><w:t xml:space="preserve">Plain </w:t></w:r>' +
+        '<w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r>' +
+        '</w:p>',
+    );
+    const { ast, paragraphs } = extractParagraphs(xml);
+    expect(() =>
+      injectTranslations(paragraphs, [
+        '<x><w:r><w:t xml:space="preserve">Simple </w:t></w:r></w:r>' +
+          '<w:r><w:rPr><w:b/></w:rPr><w:t>gras &amp; co</w:t></w:r></x>',
+      ]),
+    ).not.toThrow();
+    const result = buildXml(ast);
+    expect(result).toContain('Simple gras &amp; co');
+    expect(result).toContain('w:b');
+    expect(result).not.toContain('Plain');
+    expect(result).not.toContain('bold');
+    expect(extractParagraphs(result).paragraphs).toHaveLength(1);
+  });
+
   it('throws when paragraph and translation counts mismatch', () => {
     const xml = wrap('<w:p><w:r><w:t>Hello</w:t></w:r></w:p>');
     const { paragraphs } = extractParagraphs(xml);

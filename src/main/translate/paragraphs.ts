@@ -1,4 +1,4 @@
-import { XMLBuilder, XMLParser } from 'fast-xml-parser';
+import { XMLBuilder, XMLParser, XMLValidator } from 'fast-xml-parser';
 
 const PARSER_OPTS = {
   ignoreAttributes: false,
@@ -141,9 +141,43 @@ export function injectTranslations(
   for (let i = 0; i < paragraphs.length; i++) {
     const p = paragraphs[i];
     const stripped = stripXWrapper(translations[i]);
+    // DeepL sometimes returns unbalanced tags; fast-xml-parser doesn't validate and crashes
+    // on them ("reading 'addChild'"), so keep the original runs and inject plain text instead.
+    if (XMLValidator.validate(`<x>${stripped}</x>`) !== true) {
+      console.warn(`injectTranslations: malformed XML from DeepL for paragraph ${i}:`, stripped);
+      injectPlainText(p, stripped);
+      continue;
+    }
     const parsed = parser.parse(stripped) as Node[];
     const keep = p.pPrIndex >= 0 ? p.pContainer['w:p'].slice(0, p.pPrIndex + 1) : [];
     p.pContainer['w:p'] = [...keep, ...parsed];
+  }
+}
+
+const XML_ENTITIES: Record<string, string> = { lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' };
+
+// ponytail: formatting inside the paragraph collapses onto the first run; only used for bad DeepL output.
+function injectPlainText(p: ExtractedParagraph, translatedXml: string): void {
+  const text = [...translatedXml.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g)]
+    .map((m) => m[1])
+    .join('')
+    .replace(/&(lt|gt|quot|apos|amp);/g, (_, e: string) => XML_ENTITIES[e]);
+  const textNodes: Node[] = [];
+  collectTextNodes(p.pContainer['w:p'].slice(p.pPrIndex + 1), textNodes);
+  if (textNodes.length === 0) return;
+  const [first, ...rest] = textNodes;
+  first['w:t'] = [{ '#text': text }];
+  first[':@'] = { ...first[':@'], '@_xml:space': 'preserve' };
+  for (const n of rest) n['w:t'] = [];
+}
+
+function collectTextNodes(nodes: Node[], out: Node[]): void {
+  for (const n of nodes) {
+    if (typeof n !== 'object' || n === null) continue;
+    for (const key of Object.keys(n)) {
+      if (key === 'w:t') out.push(n);
+      else if (key !== ':@' && Array.isArray(n[key])) collectTextNodes(n[key] as Node[], out);
+    }
   }
 }
 
