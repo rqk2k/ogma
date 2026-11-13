@@ -23,35 +23,12 @@ function endpointBase(apiKey: string): string {
   return apiKey.endsWith(':fx') ? 'https://api-free.deepl.com' : 'https://api.deepl.com';
 }
 
-const STRATEGY_C_TAG_CONFIG = {
+// Payloads are text plus inline codes (see inlineCodes.ts), never raw WordprocessingML.
+const INLINE_CODE_TAG_CONFIG = {
   tag_handling: 'xml',
   outline_detection: false,
   splitting_tags: [] as string[],
-  non_splitting_tags: ['x', 'w:r', 'w:t', 'w:hyperlink', 'w:smartTag'],
-  ignore_tags: [
-    'w:rPr',
-    'w:pPr',
-    'w:tab',
-    'w:br',
-    'w:softHyphen',
-    'w:fldChar',
-    'w:instrText',
-    'w:bookmarkStart',
-    'w:bookmarkEnd',
-    'w:commentRangeStart',
-    'w:commentRangeEnd',
-    'w:commentReference',
-    'w:footnoteReference',
-    'w:endnoteReference',
-    'w:sectPr',
-    'w:proofErr',
-    'w:noProof',
-    'w:lang',
-    'w:drawing',
-    'w:object',
-    'w:pict',
-    'w:tabs',
-  ],
+  non_splitting_tags: ['x', 'g', 'ph'],
 };
 
 export async function fetchUsage(apiKey: string): Promise<UsageInfo> {
@@ -89,7 +66,7 @@ async function translateBatch(
     text: texts,
     target_lang: opts.targetLang,
     formality: opts.formality,
-    ...STRATEGY_C_TAG_CONFIG,
+    ...INLINE_CODE_TAG_CONFIG,
   });
 
   let res: Response;

@@ -135,12 +135,17 @@ watch(
     <section class="controls">
       <LanguageSelect v-model="targetLang" :disabled="state.status === 'running'" />
     </section>
+
+    <footer class="footer">
+      © {{ new Date().getFullYear() }} Secretariat of the Convention on Biological Diversity · Internal use only
+    </footer>
   </main>
 </template>
 
 <style scoped>
 .main-view {
-  height: 100%;
+  min-height: 100vh;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   padding: 1.5rem;
@@ -183,6 +188,11 @@ watch(
 }
 .banner {
   flex-shrink: 0;
+}
+.footer {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #6b6b6b;
 }
 .body {
   flex: 1;
