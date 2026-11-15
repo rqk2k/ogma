@@ -15,6 +15,9 @@ const config: ForgeConfig = {
     appBundleId: 'com.rqk.ogma',
     osxSign: {
       identity: '-',
+      // '-' (ad-hoc) isn't a keychain identity, so lookup must be skipped or signing silently fails
+      identityValidation: false,
+      continueOnError: false,
       optionsForFile: () => ({
         hardenedRuntime: true,
         entitlements: 'build/entitlements.mac.plist',

@@ -56,5 +56,8 @@
     "naive-ui": "^2.44.1",
     "vue": "^3.5.35",
     "vue-router": "^5.1.0"
+  },
+  "resolutions": {
+    "yauzl": "^3.4.0"
   }
 }
