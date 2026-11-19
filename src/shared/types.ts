@@ -11,7 +11,7 @@ export type SaveApiKeyResult =
       message: string;
     };
 
-export type TargetLang = 'EN-GB' | 'FR' | 'ES' | 'RU' | 'ZH-HANS';
+export type TargetLang = 'EN-GB' | 'FR' | 'ES' | 'RU' | 'ZH-HANS' | 'AR';
 
 export type Formality = 'default' | 'prefer_more' | 'prefer_less';
 

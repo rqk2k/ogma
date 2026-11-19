@@ -11,4 +11,5 @@ export const TARGET_LANGUAGES: TargetLanguageOption[] = [
   { code: 'ES', label: 'Spanish' },
   { code: 'RU', label: 'Russian' },
   { code: 'ZH-HANS', label: 'Chinese (Simplified)' },
+  { code: 'AR', label: 'Arabic' },
 ];

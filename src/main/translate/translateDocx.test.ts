@@ -13,18 +13,24 @@ const DOCUMENT_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </w:body>
 </w:document>`;
 
+const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults>
+</w:styles>`;
+
 async function makeFixtureDocx(filePath: string): Promise<void> {
   const zip = new JSZip();
   zip.file('word/document.xml', DOCUMENT_XML);
+  zip.file('word/styles.xml', STYLES_XML);
   const buf = await zip.generateAsync({ type: 'nodebuffer' });
   await writeFile(filePath, buf);
 }
 
-async function readDocumentXml(filePath: string): Promise<string> {
+async function readPart(filePath: string, part = 'word/document.xml'): Promise<string> {
   const buf = await readFile(filePath);
   const zip = await JSZip.loadAsync(buf);
-  const file = zip.file('word/document.xml');
-  if (!file) throw new Error('document.xml missing');
+  const file = zip.file(part);
+  if (!file) throw new Error(`${part} missing`);
   return await file.async('string');
 }
 
@@ -66,11 +72,61 @@ describe('translateDocx end-to-end', () => {
     });
 
     expect(result.outputPath).toBe(path.join(tmpDir, 'sample.FR.docx'));
-    const outXml = await readDocumentXml(result.outputPath);
+    const outXml = await readPart(result.outputPath);
     expect(outXml).toContain('Bonjour le monde');
     expect(outXml).toContain('Au revoir le monde');
     expect(outXml).not.toContain('Hello world');
     expect(outXml).not.toContain('Goodbye world');
+  });
+
+  it('lays out Arabic translations right to left, including default text size', async () => {
+    const input = path.join(tmpDir, 'sample.docx');
+    await makeFixtureDocx(input);
+    fetchMock.mockImplementation(async (_url, init) => {
+      const body = JSON.parse(init.body) as { text: string[]; target_lang: string };
+      expect(body.target_lang).toBe('AR');
+      return new Response(
+        JSON.stringify({ translations: body.text.map(() => ({ text: '<x>مرحبا بالعالم</x>' })) }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+
+    const result = await translateDocx({
+      inputPath: input,
+      targetLang: 'AR',
+      formality: 'prefer_more',
+      apiKey: 'fake-key:fx',
+    });
+
+    expect(result.outputPath).toBe(path.join(tmpDir, 'sample.AR.docx'));
+    const outXml = await readPart(result.outputPath);
+    expect(outXml).toContain('مرحبا بالعالم');
+    expect(outXml.match(/<w:pPr><w:bidi>/g)).toHaveLength(2);
+    expect(await readPart(result.outputPath, 'word/styles.xml')).toContain(
+      '<w:sz w:val="24"></w:sz><w:szCs w:val="24"></w:szCs>',
+    );
+  });
+
+  it('leaves layout alone for left-to-right targets', async () => {
+    const input = path.join(tmpDir, 'sample.docx');
+    await makeFixtureDocx(input);
+    fetchMock.mockImplementation(async (_url, init) => {
+      const body = JSON.parse(init.body) as { text: string[] };
+      return new Response(
+        JSON.stringify({ translations: body.text.map((t) => ({ text: t })) }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+
+    const result = await translateDocx({
+      inputPath: input,
+      targetLang: 'FR',
+      formality: 'prefer_more',
+      apiKey: 'fake-key:fx',
+    });
+
+    expect(await readPart(result.outputPath)).not.toContain('w:bidi');
+    expect(await readPart(result.outputPath, 'word/styles.xml')).toBe(STYLES_XML);
   });
 
   it('emits phase progress events', async () => {
